@@ -5,12 +5,7 @@ from app import models, schemas, auth, database
 
 app = FastAPI(title="Come On Da Sample")
 
-@app.on_event("startup")
-async def startup():
-    async with database.engine.begin() as conn:
-        # Create tables (useful for development, but ideally use Alembic)
-        # await conn.run_sync(models.Base.metadata.create_all) 
-        pass
+
 
 @app.post("/signup", response_model=schemas.Token)
 async def signup(user: schemas.UserCreate, db: AsyncSession = Depends(database.get_db)):
@@ -58,3 +53,31 @@ async def login(user_credentials: schemas.UserLogin, db: AsyncSession = Depends(
     # Generate token
     access_token = auth.create_access_token(data={"sub": user.phone_number})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me", response_model=schemas.UserBase)
+async def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
+
+# News Endpoints
+@app.post("/news", response_model=schemas.News)
+async def create_news(
+    news: schemas.NewsCreate, 
+    db: AsyncSession = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="You do not have permission to perform this action"
+        )
+    
+    new_news = models.News(**news.model_dump())
+    db.add(new_news)
+    await db.commit()
+    await db.refresh(new_news)
+    return new_news
+
+@app.get("/news", response_model=list[schemas.News])
+async def read_news(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db)):
+    result = await db.execute(select(models.News).offset(skip).limit(limit).order_by(models.News.created_at.desc()))
+    return result.scalars().all()
