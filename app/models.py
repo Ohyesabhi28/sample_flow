@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -20,3 +20,13 @@ class News(Base):
     content = Column(String)
     image_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(String)
+    price = Column(Float)
+    image_url = Column(String, nullable=True)
+    publish_at = Column(DateTime(timezone=True), default=func.now())
