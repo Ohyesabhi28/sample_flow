@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import models, schemas, auth, database
+from app import models, schemas, auth, database, crud
 
 app = FastAPI(title="Come On Da Sample")
 
@@ -14,14 +14,12 @@ async def root():
 @app.post("/signup", response_model=schemas.Token)
 async def signup(user: schemas.UserCreate, db: AsyncSession = Depends(database.get_db)):
     # Check if phone number already exists
-    result = await db.execute(select(models.User).filter(models.User.phone_number == user.phone_number))
-    db_user = result.scalars().first()
+    db_user = await crud.get_user_by_phone(db, user.phone_number)
     if db_user:
         raise HTTPException(status_code=400, detail="Phone number already registered")
     
     # Check if email already exists
-    result = await db.execute(select(models.User).filter(models.User.email == user.email))
-    db_user_email = result.scalars().first()
+    db_user_email = await crud.get_user_by_email(db, user.email)
     if db_user_email:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -47,8 +45,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(database.get_db)):
     # Swagger UI sends 'username' and 'password' as form data
     # We map 'username' to 'phone_number'
-    result = await db.execute(select(models.User).filter(models.User.phone_number == form_data.username))
-    user = result.scalars().first()
+    user = await crud.get_user_by_phone(db, form_data.username)
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -62,8 +59,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.post("/login", response_model=schemas.Token)
 async def login(user_credentials: schemas.UserLogin, db: AsyncSession = Depends(database.get_db)):
     # Find user by phone number
-    result = await db.execute(select(models.User).filter(models.User.phone_number == user_credentials.phone_number))
-    user = result.scalars().first()
+    user = await crud.get_user_by_phone(db, user_credentials.phone_number)
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
