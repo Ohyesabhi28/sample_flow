@@ -9,9 +9,27 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+class UserProfileBase(BaseModel):
+    address: str | None = None
+    wins: int = 0
+    losses: int = 0
+    total_cash: float = 0.0
+    mage: str | None = None
+
+class UserProfileCreate(UserProfileBase):
+    pass
+
+class UserProfile(UserProfileBase):
+    id: int
+    user_id: int
+
+    class Config:
+        from_attributes = True
+
 class User(UserBase):
     id: int
     is_admin: bool = False
+    profile: UserProfile | None = None
     
     class Config:
         from_attributes = True

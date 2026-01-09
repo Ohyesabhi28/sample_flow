@@ -31,3 +31,6 @@ wheels/
 # IDEs
 .vscode/
 .idea/
+
+# Logs
+*.log

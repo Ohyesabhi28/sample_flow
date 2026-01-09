@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import models, schemas, auth, database, crud
+from app import models, schemas, auth, database, crud, tasks
 
 app = FastAPI(title="Come On Da Sample")
 
@@ -76,6 +77,31 @@ async def login(user_credentials: schemas.UserLogin, db: AsyncSession = Depends(
 async def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
 
+@app.post("/users/me/profile", response_model=schemas.UserProfile)
+async def create_update_profile(
+    profile: schemas.UserProfileCreate,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if current_user.profile:
+        for key, value in profile.model_dump(exclude_unset=True).items():
+            setattr(current_user.profile, key, value)
+        db.add(current_user.profile)
+        await db.commit()
+        await db.refresh(current_user.profile)
+        return current_user.profile
+    else:
+        new_profile = models.UserProfile(**profile.model_dump(), user_id=current_user.id)
+        db.add(new_profile)
+        await db.commit()
+        await db.refresh(new_profile)
+        return new_profile
+
+@app.get("/users", response_model=list[schemas.User])
+async def read_users(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    result = await db.execute(select(models.User).options(selectinload(models.User.profile)).offset(skip).limit(limit))
+    return result.scalars().all()
+
 # News Endpoints
 @app.post("/news", response_model=schemas.News)
 async def create_news(
@@ -100,10 +126,7 @@ async def read_news(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(d
     result = await db.execute(select(models.News).offset(skip).limit(limit).order_by(models.News.created_at.desc()))
     return result.scalars().all()
 
-# Background Task
-def log_product_creation(product_name: str):
-    # Simulate a time-consuming background task
-    print(f"BACKGROUND TASK: New product created - {product_name}")
+
 
 # Product Endpoints
 from fastapi import BackgroundTasks
@@ -132,7 +155,7 @@ async def create_product(
     await db.refresh(new_product)
 
     # Trigger background task
-    background_tasks.add_task(log_product_creation, new_product.name)
+    background_tasks.add_task(tasks.log_product_creation, new_product.name)
 
     return new_product
 
