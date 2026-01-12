@@ -90,3 +90,18 @@ class Question(QuestionBase):
 
     class Config:
         from_attributes = True
+
+class QuestionPublic(QuestionBase):
+    id: int
+    created_at: datetime
+    # answer is excluded
+
+    class Config:
+        from_attributes = True
+
+class AnswerCheck(BaseModel):
+    answer: str
+
+class AnswerResult(BaseModel):
+    correct: bool
+    message: str

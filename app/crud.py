@@ -46,3 +46,7 @@ async def create_question(db: AsyncSession, question: models.Question):
 async def get_questions(db: AsyncSession, skip: int = 0, limit: int = 10):
     result = await db.execute(select(models.Question).offset(skip).limit(limit).order_by(models.Question.created_at.desc()))
     return result.scalars().all()
+
+async def get_question(db: AsyncSession, question_id: int):
+    result = await db.execute(select(models.Question).filter(models.Question.id == question_id))
+    return result.scalars().first()

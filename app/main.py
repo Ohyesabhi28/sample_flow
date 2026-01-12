@@ -188,7 +188,54 @@ async def create_question(
     new_question = await crud.create_question(db, new_question)
     return new_question
 
-@app.get("/questions", response_model=list[schemas.Question])
+@app.get("/questions", response_model=list[schemas.QuestionPublic])
 async def read_questions(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+
     # Assuming questions are visible to all authenticated users
     return await crud.get_questions(db, skip=skip, limit=limit)
+
+@app.post("/questions/{question_id}/check", response_model=schemas.AnswerResult)
+async def check_answer(
+    question_id: int,
+    answer_check: schemas.AnswerCheck,
+    db: AsyncSession = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    question = await crud.get_question(db, question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    is_correct = question.answer.strip().lower() == answer_check.answer.strip().lower()
+    
+    if is_correct:
+        # Prize distribution logic
+        if not current_user.profile:
+            # Create profile if it doesn't exist
+            new_profile = models.UserProfile(user_id=current_user.id, wins=0, losses=0, total_cash=0.0)
+            db.add(new_profile)
+            await db.commit()
+            # Reload user to get the new profile
+            await db.refresh(current_user, attribute_names=["profile"])
+        
+        # Award prize
+        current_user.profile.wins += 1
+        current_user.profile.total_cash += 10.0
+        
+        db.add(current_user.profile)
+        await db.commit()
+        await db.refresh(current_user.profile)
+
+        return {"correct": True, "message": "Correct answer! You won $10.00!"}
+    else:
+        # Optional: Increment losses
+        if not current_user.profile:
+             new_profile = models.UserProfile(user_id=current_user.id, wins=0, losses=0, total_cash=0.0)
+             db.add(new_profile)
+             await db.commit()
+             await db.refresh(current_user, attribute_names=["profile"])
+             
+        current_user.profile.losses += 1
+        db.add(current_user.profile)
+        await db.commit()
+        
+        return {"correct": False, "message": "Incorrect answer. Try again."}
