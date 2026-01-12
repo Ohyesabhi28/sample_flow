@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app import models, schemas, auth, database, crud, tasks
 
+
 app = FastAPI(title="Come On Da Sample")
 
 @app.get("/")
@@ -116,15 +117,12 @@ async def create_news(
         )
     
     new_news = models.News(**news.model_dump())
-    db.add(new_news)
-    await db.commit()
-    await db.refresh(new_news)
+    new_news = await crud.create_news(db, new_news)
     return new_news
 
 @app.get("/news", response_model=list[schemas.News])
 async def read_news(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db)):
-    result = await db.execute(select(models.News).offset(skip).limit(limit).order_by(models.News.created_at.desc()))
-    return result.scalars().all()
+    return await crud.get_news(db, skip=skip, limit=limit)
 
 
 
@@ -150,9 +148,7 @@ async def create_product(
         product.publish_at = datetime.now(timezone.utc)
 
     new_product = models.Product(**product.model_dump())
-    db.add(new_product)
-    await db.commit()
-    await db.refresh(new_product)
+    new_product = await crud.create_product(db, new_product)
 
     # Trigger background task
     background_tasks.add_task(tasks.log_product_creation, new_product.name)
@@ -163,10 +159,4 @@ async def create_product(
 async def read_products(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db)):
     now = datetime.now(timezone.utc)
     # Only show products where publish_at <= now
-    result = await db.execute(
-        select(models.Product)
-        .filter(models.Product.publish_at <= now)
-        .offset(skip)
-        .limit(limit)
-    )
-    return result.scalars().all()
+    return await crud.get_active_products(db, now, skip=skip, limit=limit)

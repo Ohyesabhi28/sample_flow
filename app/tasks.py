@@ -9,8 +9,4 @@ logging.basicConfig(
 )
 
 def log_product_creation(product_name: str):
-    """
-    Logs the creation of a new product to a file.
-    This is intended to be run as a background task.
-    """
     logging.info(f"New product created: {product_name}")
