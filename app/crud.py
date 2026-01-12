@@ -36,3 +36,13 @@ async def get_active_products(db: AsyncSession, now: datetime, skip: int = 0, li
         .limit(limit)
     )
     return result.scalars().all()
+
+async def create_question(db: AsyncSession, question: models.Question):
+    db.add(question)
+    await db.commit()
+    await db.refresh(question)
+    return question
+
+async def get_questions(db: AsyncSession, skip: int = 0, limit: int = 10):
+    result = await db.execute(select(models.Question).offset(skip).limit(limit).order_by(models.Question.created_at.desc()))
+    return result.scalars().all()

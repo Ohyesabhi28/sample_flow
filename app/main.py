@@ -2,7 +2,17 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import models, schemas, auth, database, crud, tasks
+from app import models, schemas, auth, database, crud
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+def log_product_creation(product_name: str):
+    logging.info(f"New product created: {product_name}")
 
 
 app = FastAPI(title="Come On Da Sample")
@@ -151,7 +161,7 @@ async def create_product(
     new_product = await crud.create_product(db, new_product)
 
     # Trigger background task
-    background_tasks.add_task(tasks.log_product_creation, new_product.name)
+    background_tasks.add_task(log_product_creation, new_product.name)
 
     return new_product
 
@@ -160,3 +170,25 @@ async def read_products(skip: int = 0, limit: int = 10, db: AsyncSession = Depen
     now = datetime.now(timezone.utc)
     # Only show products where publish_at <= now
     return await crud.get_active_products(db, now, skip=skip, limit=limit)
+
+# Question Endpoints
+@app.post("/questions", response_model=schemas.Question)
+async def create_question(
+    question: schemas.QuestionCreate, 
+    db: AsyncSession = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="You do not have permission to perform this action"
+        )
+    
+    new_question = models.Question(**question.model_dump())
+    new_question = await crud.create_question(db, new_question)
+    return new_question
+
+@app.get("/questions", response_model=list[schemas.Question])
+async def read_questions(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Assuming questions are visible to all authenticated users
+    return await crud.get_questions(db, skip=skip, limit=limit)

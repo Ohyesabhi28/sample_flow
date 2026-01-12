@@ -76,3 +76,17 @@ class Product(ProductBase):
 
     class Config:
         from_attributes = True
+
+class QuestionBase(BaseModel):
+    text: str
+    answer: str
+
+class QuestionCreate(QuestionBase):
+    pass
+
+class Question(QuestionBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

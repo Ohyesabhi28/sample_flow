@@ -46,3 +46,11 @@ class Product(Base):
     price = Column(Float)
     image_url = Column(String, nullable=True)
     publish_at = Column(DateTime(timezone=True), default=func.now())
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(String, index=True)
+    answer = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
