@@ -1,8 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app import models, schemas, auth, database, crud
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import logging
 
 # Configure logging
@@ -14,6 +18,47 @@ logging.basicConfig(
 def log_product_creation(product_name: str):
     logging.info(f"New product created: {product_name}")
 
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+from pydantic import EmailStr
+import os
+
+# Email Configuration
+conf = ConnectionConfig(
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+    MAIL_FROM=os.getenv("MAIL_FROM"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+    MAIL_STARTTLS=True,
+    MAIL_SSL_TLS=False,
+    USE_CREDENTIALS=True,
+    VALIDATE_CERTS=True
+)
+
+async def send_welcome_email(email: EmailStr, username: str):
+    """
+    Sends a welcome email to the user using fastapi-mail.
+    """
+    html = f"""
+    <p>Hello {username},</p>
+    <p>Welcome to <b>Come On Da Sample</b>!</p> 
+    <p>We are excited to have you on board.</p>
+    <br>
+    <p>Best regards,</p>
+    <p>The Team</p>
+    """
+
+    message = MessageSchema(
+        subject="Welcome to Come On Da Sample!",
+        recipients=[email],
+        body=html,
+        subtype=MessageType.html
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+    logging.info(f"Welcome email sent to {email}")
+
 
 app = FastAPI(title="Come On Da Sample")
 
@@ -24,7 +69,7 @@ async def root():
 
 
 @app.post("/signup", response_model=schemas.Token)
-async def signup(user: schemas.UserCreate, db: AsyncSession = Depends(database.get_db)):
+async def signup(user: schemas.UserCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(database.get_db)):
     # Check if phone number already exists
     db_user = await crud.get_user_by_phone(db, user.phone_number)
     if db_user:
@@ -46,6 +91,9 @@ async def signup(user: schemas.UserCreate, db: AsyncSession = Depends(database.g
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # Trigger background task for welcome email
+    background_tasks.add_task(send_welcome_email, new_user.email, new_user.username)
 
     # Return access token
     access_token = auth.create_access_token(data={"sub": new_user.phone_number})
@@ -137,7 +185,7 @@ async def read_news(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(d
 
 
 # Product Endpoints
-from fastapi import BackgroundTasks
+
 from datetime import datetime, timezone
 
 @app.post("/products", response_model=schemas.Product)
